@@ -1,3 +1,5 @@
+import UsageMetrics from "./UsageMetrics.jsx";
+
 const STATUS_STYLES = {
   pending: "bg-amber-100 text-amber-800 ring-amber-600/20",
   processing: "bg-indigo-100 text-indigo-800 ring-indigo-600/20",
@@ -5,7 +7,7 @@ const STATUS_STYLES = {
   failed: "bg-rose-100 text-rose-800 ring-rose-600/20",
 };
 
-export default function StatusTracker({ status, progress, error, jobId, polling }) {
+export default function StatusTracker({ status, progress, error, jobId, polling, meta }) {
   if (!jobId) return null;
 
   const pct =
@@ -56,6 +58,8 @@ export default function StatusTracker({ status, progress, error, jobId, polling 
           <p className="mt-1 text-rose-700">{error}</p>
         </div>
       )}
+
+      <UsageMetrics meta={meta} />
     </section>
   );
 }

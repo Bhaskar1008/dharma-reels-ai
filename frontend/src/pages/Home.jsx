@@ -9,12 +9,16 @@ const TERMINAL = new Set(["completed", "failed"]);
 
 export default function Home() {
   const [script, setScript] = useState("");
-  const [voice, setVoice] = useState("default");
+  const [voiceGender, setVoiceGender] = useState("female");
+  const [subtitlesEnabled, setSubtitlesEnabled] = useState(true);
+  const [backgroundMusicEnabled, setBackgroundMusicEnabled] = useState(false);
+  const [musicPrompt, setMusicPrompt] = useState("");
   const [jobId, setJobId] = useState(null);
   const [status, setStatus] = useState(null);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState(null);
   const [apiError, setApiError] = useState(null);
+  const [jobMeta, setJobMeta] = useState(null);
   const [videoUrl, setVideoUrl] = useState(null);
   const [starting, setStarting] = useState(false);
   const [polling, setPolling] = useState(false);
@@ -54,6 +58,7 @@ export default function Home() {
 
         setStatus(data.status);
         setProgress(typeof data.progress === "number" ? data.progress : 0);
+        if (data.meta) setJobMeta(data.meta);
         if (data.error) setError(data.error);
 
         if (data.status === "completed" && previewLoadedForJob.current !== jobId) {
@@ -94,9 +99,17 @@ export default function Home() {
     setJobId(null);
     setStatus(null);
     setProgress(0);
+    setJobMeta(null);
     setStarting(true);
     try {
-      const data = await createVideo(script.trim());
+      const data = await createVideo(script.trim(), {
+        voiceGender,
+        subtitlesEnabled,
+        backgroundMusic: {
+          enabled: backgroundMusicEnabled,
+          ...(musicPrompt.trim() ? { prompt: musicPrompt.trim() } : {}),
+        },
+      });
       setJobId(data.id);
       setStatus(data.status || "pending");
       setProgress(0);
@@ -151,8 +164,14 @@ export default function Home() {
         <ScriptInput
           value={script}
           onChange={setScript}
-          voice={voice}
-          onVoiceChange={setVoice}
+          voiceGender={voiceGender}
+          onVoiceGenderChange={setVoiceGender}
+          subtitlesEnabled={subtitlesEnabled}
+          onSubtitlesEnabledChange={setSubtitlesEnabled}
+          backgroundMusicEnabled={backgroundMusicEnabled}
+          onBackgroundMusicEnabledChange={setBackgroundMusicEnabled}
+          musicPrompt={musicPrompt}
+          onMusicPromptChange={setMusicPrompt}
           onSubmit={handleGenerate}
           disabled={starting || processing}
           busy={starting}
@@ -164,6 +183,7 @@ export default function Home() {
           error={error}
           jobId={jobId}
           polling={polling}
+          meta={jobMeta}
         />
 
         <div ref={previewRef}>

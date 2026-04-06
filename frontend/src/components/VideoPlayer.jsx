@@ -21,9 +21,12 @@ export default function VideoPlayer({ videoUrl, onDownload, downloadBusy }) {
 
       <div className="mt-4 overflow-hidden rounded-xl bg-black shadow-inner">
         <video
+          key={videoUrl}
           className="mx-auto max-h-[70vh] w-full object-contain"
           controls
           playsInline
+          preload="metadata"
+          crossOrigin="anonymous"
           src={videoUrl}
         >
           Your browser does not support the video tag.
