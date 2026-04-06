@@ -11,10 +11,15 @@ DharmaReels AI is an AI-powered video generation platform that converts Telugu m
 - 🎵 Background music integration
 
 ## 🏗️ Tech Stack
-- Frontend: React.js
+- Frontend: React (Vite) + Tailwind — see `frontend/README.md`
 - Backend: Node.js (Express)
 - Video Engine: FFmpeg
 - AI Services: TTS + Image Generation APIs
+
+## Run locally
+
+1. **Backend** (from `backend/`): `npm install` → `npm run dev` (default `http://localhost:3001`).
+2. **Frontend** (from `frontend/`): `npm install` → copy `frontend/.env.example` to `frontend/.env` → `npm run dev` (default `http://localhost:5173`).
 
 ## 🎯 Use Case
 Create YouTube Shorts, Instagram Reels, and TikTok videos from mythology stories like Mahabharata, Ramayana, and more.
