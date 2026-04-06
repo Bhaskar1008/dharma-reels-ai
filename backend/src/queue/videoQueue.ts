@@ -1,6 +1,7 @@
 import IORedis from "ioredis";
 import { Queue } from "bullmq";
 import type { AppConfig } from "../config/index.js";
+import type { VideoRequestOptions } from "../types/index.js";
 
 export const VIDEO_QUEUE_NAME = "dharma-reels-video";
 
@@ -9,6 +10,7 @@ export const VIDEO_JOB_NAME = "render";
 
 export interface VideoJobData {
   script: string;
+  request?: VideoRequestOptions;
 }
 
 export function createVideoQueue(cfg: AppConfig): Queue<VideoJobData> {

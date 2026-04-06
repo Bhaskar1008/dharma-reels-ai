@@ -54,6 +54,8 @@ export const config = {
   redisUrl: envString("REDIS_URL", "redis://127.0.0.1:6379"),
   queueConcurrency: envInt("QUEUE_CONCURRENCY", 2),
   jobAttempts: envInt("JOB_ATTEMPTS", 2),
+  /** When true, delete intermediate files under storage/output/<jobId>/ after success. Default keeps them for debugging. */
+  cleanupJobWorkDir: envBool("VIDEO_CLEANUP_WORKDIR", false),
   openai: {
     apiKey: process.env.OPENAI_API_KEY ?? "",
     baseUrl: envString("OPENAI_API_BASE_URL", "https://api.openai.com/v1"),

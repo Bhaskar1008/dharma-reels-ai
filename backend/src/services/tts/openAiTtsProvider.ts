@@ -4,7 +4,7 @@ import { pipeline } from "node:stream/promises";
 import type { AppConfig } from "../../config/index.js";
 import { probeDurationSec } from "../../utils/mediaProbe.js";
 import { withRetry } from "../../utils/retry.js";
-import type { TtsProvider, TtsResult } from "./ttsTypes.js";
+import type { TtsProvider, TtsResult, TtsSynthesizeOptions } from "./ttsTypes.js";
 
 /** OpenAI speech API; use for real voice when API key is configured. */
 export class OpenAiTtsProvider implements TtsProvider {
@@ -12,18 +12,20 @@ export class OpenAiTtsProvider implements TtsProvider {
 
   constructor(private readonly cfg: AppConfig) {}
 
-  async synthesize(script: string, outBasePath: string): Promise<TtsResult> {
+  async synthesize(script: string, outBasePath: string, options?: TtsSynthesizeOptions): Promise<TtsResult> {
     const key = this.cfg.openai.apiKey.trim();
     if (!key) {
       throw new Error("OPENAI_API_KEY is required when TTS_PROVIDER=openai");
     }
+
+    const voice = (options?.voice ?? this.cfg.openai.ttsVoice).trim() || "alloy";
 
     const audioPath = `${outBasePath}.mp3`;
     const speechUrl = `${this.cfg.openai.baseUrl.replace(/\/$/, "")}/audio/speech`;
 
     const body = JSON.stringify({
       model: this.cfg.openai.ttsModel,
-      voice: this.cfg.openai.ttsVoice,
+      voice,
       input: script,
       format: "mp3",
     });

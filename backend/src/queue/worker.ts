@@ -12,9 +12,22 @@ const pipeline = createVideoPipeline(config);
 const worker = new Worker(
   VIDEO_QUEUE_NAME,
   async (job) => {
+    let metaAcc: Record<string, unknown> = {};
     const result = await pipeline.execute(job.id as string, job.data.script, {
+      request: job.data.request,
       onProgress: async (p) => {
-        await job.updateProgress(p);
+        await job.updateProgress({ value: p, meta: { ...metaAcc } });
+      },
+      onMetaPatch: async (patch) => {
+        metaAcc = { ...metaAcc, ...patch };
+        const cur = job.progress;
+        const v =
+          typeof cur === "object" && cur !== null && "value" in cur
+            ? Number((cur as { value?: number }).value)
+            : typeof cur === "number"
+              ? cur
+              : 0;
+        await job.updateProgress({ value: v, meta: { ...metaAcc } });
       },
     });
     return result;

@@ -3,7 +3,7 @@ import { estimateSpeechSeconds, segmentScenes } from "../sceneSegmentationServic
 import { probeDurationSec } from "../../utils/mediaProbe.js";
 import { runCommand } from "../../utils/exec.js";
 import { withRetry } from "../../utils/retry.js";
-import type { TtsProvider, TtsResult } from "./ttsTypes.js";
+import type { TtsProvider, TtsResult, TtsSynthesizeOptions } from "./ttsTypes.js";
 
 /**
  * Phase 1 mock TTS: generates a silent AAC track whose length scales with script size.
@@ -29,7 +29,7 @@ export class MockTtsProvider implements TtsProvider {
     return Math.round(bounded * 10) / 10;
   }
 
-  async synthesize(script: string, outBasePath: string): Promise<TtsResult> {
+  async synthesize(script: string, outBasePath: string, _options?: TtsSynthesizeOptions): Promise<TtsResult> {
     const durationSec = this.estimateDurationSec(script);
     const audioPath = `${outBasePath}.m4a`;
 

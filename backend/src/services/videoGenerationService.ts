@@ -6,7 +6,11 @@ import { log } from "../utils/logger.js";
 import { probeDurationSec } from "../utils/mediaProbe.js";
 import { runCommand } from "../utils/exec.js";
 import { withRetry } from "../utils/retry.js";
-import { buildConcatAndSubtitlesFilter, buildSceneVideoFilterChain } from "./transitionService.js";
+import {
+  buildConcatAndSubtitlesFilter,
+  buildConcatVideoOnly,
+  buildSceneVideoFilterChain,
+} from "./transitionService.js";
 
 export interface SlideshowSceneInput {
   imagePath: string;
@@ -20,6 +24,7 @@ export interface RenderSlideshowInput {
   outputPath: string;
   /** Final mux duration (seconds), must match narration audio — prevents a long blank tail if video runs longer than audio. */
   muxDurationSec: number;
+  burnSubtitles: boolean;
 }
 
 /**
@@ -45,6 +50,9 @@ export class VideoGenerationService {
     const workDir = path.dirname(path.resolve(input.srtPath));
     const relFromWork = (filePath: string): string => {
       const rel = path.relative(workDir, path.resolve(filePath));
+      if (!rel || rel === ".") {
+        throw new Error(`ffmpeg paths: could not relativize ${filePath} under ${workDir}`);
+      }
       return rel.split(path.sep).join("/");
     };
 
@@ -55,18 +63,20 @@ export class VideoGenerationService {
       );
     }
 
-    const subBody = buildSubtitlesFilterBasename(input.srtPath);
-    fcParts.push(buildConcatAndSubtitlesFilter(n, subBody));
+    if (input.burnSubtitles) {
+      const subBody = buildSubtitlesFilterBasename(input.srtPath);
+      fcParts.push(buildConcatAndSubtitlesFilter(n, subBody));
+    } else {
+      fcParts.push(buildConcatVideoOnly(n));
+    }
 
     const filterComplex = fcParts.join(";");
 
     const args: string[] = ["-y"];
     for (let i = 0; i < n; i++) {
       const s = input.scenes[i]!;
-      // Order matters for image2: loop → framerate → duration → input (wrong order can yield black frames).
+      // Do not force -f image2: OpenAI (and fallbacks) may be PNG/JPEG; wrong demuxer yields black frames.
       args.push(
-        "-f",
-        "image2",
         "-loop",
         "1",
         "-framerate",
@@ -78,14 +88,20 @@ export class VideoGenerationService {
       );
     }
     const audioIndex = n;
-    args.push("-i", relFromWork(input.audioPath));
+    const audioRel = relFromWork(input.audioPath);
+    const isMp3 = audioRel.toLowerCase().endsWith(".mp3");
+    if (isMp3) {
+      args.push("-f", "mp3", "-i", audioRel);
+    } else {
+      args.push("-i", audioRel);
+    }
     args.push(
       "-filter_complex",
       filterComplex,
       "-map",
       "[outv]",
       "-map",
-      `${audioIndex}:a`,
+      `${audioIndex}:a:0`,
       "-c:v",
       "libx264",
       "-preset",

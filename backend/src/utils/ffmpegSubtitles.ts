@@ -20,6 +20,9 @@ export function buildSubtitlesFilterValue(srtAbsPath: string): string {
  */
 export function buildSubtitlesFilterBasename(srtPath: string): string {
   const base = path.basename(path.resolve(srtPath));
-  const escaped = base.replace(/'/g, "'\\''");
-  return `subtitles=filename='${escaped}':charenc=UTF-8`;
+  if (!base || base.includes(",") || base.includes(":")) {
+    throw new Error(`unsupported SRT filename for FFmpeg filter: ${base}`);
+  }
+  // No quotes needed for simple names like captions.srt (avoids filter parse issues).
+  return `subtitles=${base}:charenc=UTF-8`;
 }

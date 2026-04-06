@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { JobStatus, VideoJob } from "../types/index.js";
+import type { JobStatus, VideoJob, VideoRequestOptions } from "../types/index.js";
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -9,7 +9,7 @@ function nowIso(): string {
 export class JobStore {
   private readonly jobs = new Map<string, VideoJob>();
 
-  create(script: string): VideoJob {
+  create(script: string, request?: VideoRequestOptions): VideoJob {
     const id = randomUUID();
     const job: VideoJob = {
       id,
@@ -18,9 +18,17 @@ export class JobStore {
       createdAt: nowIso(),
       updatedAt: nowIso(),
       progress: 0,
+      ...(request && Object.keys(request).length > 0 ? { request } : {}),
     };
     this.jobs.set(id, job);
     return job;
+  }
+
+  mergeMeta(id: string, patch: Record<string, unknown>): VideoJob | undefined {
+    const cur = this.jobs.get(id);
+    if (!cur) return undefined;
+    const nextMeta = { ...(cur.meta ?? {}), ...patch };
+    return this.update(id, { meta: nextMeta });
   }
 
   get(id: string): VideoJob | undefined {
@@ -29,7 +37,7 @@ export class JobStore {
 
   update(
     id: string,
-    patch: Partial<Pick<VideoJob, "status" | "outputPath" | "error" | "meta" | "progress">>
+    patch: Partial<Pick<VideoJob, "status" | "outputPath" | "error" | "meta" | "progress" | "request">>
   ): VideoJob | undefined {
     const cur = this.jobs.get(id);
     if (!cur) return undefined;

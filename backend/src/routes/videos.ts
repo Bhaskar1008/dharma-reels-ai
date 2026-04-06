@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
+import { createReadStream, existsSync, statSync } from "node:fs";
+import type { Request, Response } from "express";
 import { Router } from "express";
 import type { Queue } from "bullmq";
 import { jobToVideoJob } from "../queue/bullJobMapper.js";
@@ -8,6 +9,7 @@ import { VIDEO_JOB_NAME } from "../queue/videoQueue.js";
 import type { JobStore } from "../services/jobStore.js";
 import type { VideoPipeline } from "../services/pipeline/videoPipeline.js";
 import type { VideoJobResult } from "../types/index.js";
+import { parseVideoRequest } from "./videoRequestParse.js";
 
 export interface VideosRouterDeps {
   useQueue: boolean;
@@ -15,6 +17,44 @@ export interface VideosRouterDeps {
   jobStore: JobStore;
   pipeline: VideoPipeline;
   jobAttempts: number;
+}
+
+function streamMp4WithRange(filePath: string, req: Request, res: Response): void {
+  const stat = statSync(filePath);
+  const fileSize = stat.size;
+  const range = req.headers.range;
+
+  res.setHeader("Accept-Ranges", "bytes");
+  res.setHeader("Content-Type", "video/mp4");
+  res.setHeader("Cache-Control", "public, max-age=3600");
+
+  if (range) {
+    const m = /^bytes=(\d*)-(\d*)$/.exec(range);
+    if (!m) {
+      res.status(416).end();
+      return;
+    }
+    let start = m[1] ? parseInt(m[1], 10) : 0;
+    let end = m[2] ? parseInt(m[2], 10) : fileSize - 1;
+    if (Number.isNaN(start) || Number.isNaN(end) || start >= fileSize || end < start) {
+      res.status(416).setHeader("Content-Range", `bytes */${fileSize}`).end();
+      return;
+    }
+    end = Math.min(end, fileSize - 1);
+    const chunkSize = end - start + 1;
+    res.status(206);
+    res.setHeader("Content-Range", `bytes ${start}-${end}/${fileSize}`);
+    res.setHeader("Content-Length", String(chunkSize));
+    createReadStream(filePath, { start, end }).on("error", () => {
+      if (!res.headersSent) res.status(500).end();
+    }).pipe(res);
+    return;
+  }
+
+  res.setHeader("Content-Length", String(fileSize));
+  createReadStream(filePath).on("error", () => {
+    if (!res.headersSent) res.status(500).end();
+  }).pipe(res);
 }
 
 export function createVideosRouter(deps: VideosRouterDeps): Router {
@@ -34,6 +74,8 @@ export function createVideosRouter(deps: VideosRouterDeps): Router {
         return;
       }
 
+      const requestOpts = parseVideoRequest(req.body);
+
       if (useQueue) {
         if (!queue) {
           res.status(503).json({ error: "Queue mode enabled but Redis queue is not initialized" });
@@ -42,7 +84,7 @@ export function createVideosRouter(deps: VideosRouterDeps): Router {
         const id = randomUUID();
         await queue.add(
           VIDEO_JOB_NAME,
-          { script },
+          { script, request: requestOpts },
           {
             jobId: id,
             attempts: jobAttempts,
@@ -57,14 +99,18 @@ export function createVideosRouter(deps: VideosRouterDeps): Router {
         return;
       }
 
-      const job = jobStore.create(script);
+      const job = jobStore.create(script, requestOpts);
       setImmediate(() => {
         void (async () => {
           try {
             jobStore.update(job.id, { status: "processing", progress: 0 });
             const result = await pipeline.execute(job.id, script, {
+              request: requestOpts,
               onProgress: async (p) => {
                 jobStore.update(job.id, { progress: p });
+              },
+              onMetaPatch: async (patch) => {
+                jobStore.mergeMeta(job.id, patch);
               },
             });
             jobStore.update(job.id, {
@@ -106,6 +152,7 @@ export function createVideosRouter(deps: VideosRouterDeps): Router {
           id: vj.id,
           status: vj.status,
           script: vj.script,
+          request: vj.request,
           progress: vj.progress,
           createdAt: vj.createdAt,
           updatedAt: vj.updatedAt,
@@ -124,6 +171,7 @@ export function createVideosRouter(deps: VideosRouterDeps): Router {
         id: job.id,
         status: job.status,
         script: job.script,
+        request: job.request,
         progress: job.progress,
         createdAt: job.createdAt,
         updatedAt: job.updatedAt,
@@ -176,11 +224,15 @@ export function createVideosRouter(deps: VideosRouterDeps): Router {
         return;
       }
 
-      res.download(outputPath, `dharma-reels-${req.params.id}.mp4`, (err) => {
-        if (err && !res.headersSent) {
-          res.status(500).json({ error: "download failed" });
-        }
-      });
+      const wantAttachment = req.query.attachment === "1" || req.query.download === "1";
+      if (wantAttachment) {
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="dharma-reels-${req.params.id}.mp4"`
+        );
+      }
+
+      streamMp4WithRange(outputPath, req, res);
     } catch (err) {
       next(err);
     }

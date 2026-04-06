@@ -15,7 +15,11 @@ export function createApp() {
   const queue = config.useQueue ? createVideoQueue(config) : undefined;
 
   const app = express();
-  app.use(helmet());
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: "cross-origin" },
+    })
+  );
   app.use(cors());
   app.use(express.json({ limit: "512kb" }));
   if (config.nodeEnv !== "test") {

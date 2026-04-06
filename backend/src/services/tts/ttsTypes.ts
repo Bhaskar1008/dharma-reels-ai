@@ -5,7 +5,12 @@ export interface TtsResult {
   durationSec: number;
 }
 
+export interface TtsSynthesizeOptions {
+  /** OpenAI voice id, e.g. onyx, nova */
+  voice?: string;
+}
+
 export interface TtsProvider {
   readonly name: string;
-  synthesize(script: string, outBasePath: string): Promise<TtsResult>;
+  synthesize(script: string, outBasePath: string, options?: TtsSynthesizeOptions): Promise<TtsResult>;
 }

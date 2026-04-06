@@ -19,8 +19,13 @@ export async function mixVoiceWithBackgroundMusic(
   cfg: AppConfig,
   voicePath: string,
   outputMixedPath: string,
-  durationSec: number
+  durationSec: number,
+  options?: { enabled?: boolean }
 ): Promise<MixAudioResult> {
+  if (options?.enabled === false) {
+    return { outputPath: voicePath, usedMusic: false };
+  }
+
   const musicPath = cfg.bgmPath?.trim();
   if (!musicPath || !existsSync(musicPath)) {
     if (musicPath) {

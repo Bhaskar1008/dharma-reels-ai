@@ -21,6 +21,27 @@ export interface ImageGenerator {
   generateSceneImage(scene: ImageSceneInput, outPath: string): Promise<GeneratedSceneImage>;
 }
 
+/** OpenAI may return JPEG or PNG bytes; wrong extension breaks FFmpeg decoding (black video). */
+function imagePathForBytes(outPath: string, buf: Buffer): string {
+  const isJpeg = buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xd8;
+  const isPng = buf.length >= 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
+  const isWebp =
+    buf.length >= 12 &&
+    buf[0] === 0x52 &&
+    buf[1] === 0x49 &&
+    buf[2] === 0x46 &&
+    buf[8] === 0x57 &&
+    buf[9] === 0x45 &&
+    buf[10] === 0x42 &&
+    buf[11] === 0x50;
+  let ext = ".png";
+  if (isJpeg) ext = ".jpg";
+  else if (isWebp) ext = ".webp";
+  else if (isPng) ext = ".png";
+  const withoutExt = outPath.replace(/\.(png|jpe?g|webp)$/i, "");
+  return `${withoutExt}${ext}`;
+}
+
 function buildImagePrompt(sceneText: string): string {
   const excerpt = sceneText.trim().slice(0, 400);
   return [
@@ -61,6 +82,7 @@ export class OpenAiImageGenerator implements ImageGenerator {
     const url = `${this.cfg.openai.baseUrl.replace(/\/$/, "")}/images/generations`;
     const prompt = buildImagePrompt(scene.text);
 
+    let savedPath = outPath;
     try {
       await withRetry(
         async () => {
@@ -91,14 +113,16 @@ export class OpenAiImageGenerator implements ImageGenerator {
             throw new Error(`Image download ${imgRes.status}`);
           }
           const buf = Buffer.from(await imgRes.arrayBuffer());
-          await mkdir(path.dirname(outPath), { recursive: true });
-          await writeFile(outPath, buf);
+          const writePath = imagePathForBytes(outPath, buf);
+          await mkdir(path.dirname(writePath), { recursive: true });
+          await writeFile(writePath, buf);
+          savedPath = writePath;
         },
         { retries: 2, delayMs: 1200, label: `OpenAI image scene ${scene.index}` }
       );
 
       log.info("Generated image for scene", scene.index);
-      return { path: outPath, usedFallback: false, provider: this.name };
+      return { path: savedPath, usedFallback: false, provider: this.name };
     } catch (err) {
       log.error("Image generation failed; using placeholder", err);
       return new MockImageGenerator(this.cfg).generateSceneImage(scene, outPath);
